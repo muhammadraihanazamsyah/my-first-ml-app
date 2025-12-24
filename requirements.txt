@@ -4,3 +4,4 @@ joblib
 numpy
 scikit-image
 opencv-python-headless
+opencv-contrib-python-headless

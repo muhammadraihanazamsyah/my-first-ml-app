@@ -1,15 +1,9 @@
 import streamlit as st
+import cv2
 import numpy as np
 import joblib
 from PIL import Image
 from skimage.feature import hog
-
-# Try to import cv2, but make it optional for cloud deployment
-try:
-    import cv2
-    CV2_AVAILABLE = True
-except ImportError:
-    CV2_AVAILABLE = False
 
 st.set_page_config(
     page_title="Image Classification with SVM",
@@ -52,7 +46,7 @@ model_object = joblib.load("svm_multiclass.pkl")
 encoder_object = joblib.load("label_encoder.pkl")
 
 # Check if face detection models exist
-face_models_available = CV2_AVAILABLE and os.path.exists("svm_multiclass_wajah.pkl") and os.path.exists("label_encoder_wajah.pkl")
+face_models_available = os.path.exists("svm_multiclass_wajah.pkl") and os.path.exists("label_encoder_wajah.pkl")
 if face_models_available:
     model_face = joblib.load("svm_multiclass_wajah.pkl")
     encoder_face = joblib.load("label_encoder_wajah.pkl")
@@ -64,10 +58,8 @@ else:
 def preprocess_image(uploaded_file):
     image = Image.open(uploaded_file).convert("RGB")
     img = np.array(image)
-    # Convert RGB to grayscale using PIL/numpy
-    gray = Image.fromarray(np.array(image).astype('uint8')).convert("L")
-    gray = gray.resize((128, 128), Image.Resampling.LANCZOS)
-    gray = np.array(gray)
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    gray = cv2.resize(gray, (128, 128))
     features = hog(
         gray,
         orientations=9,
@@ -197,100 +189,97 @@ if face_models_available and tab2 is not None:
 
 if face_models_available and tab3 is not None:
     with tab3:
-        if not CV2_AVAILABLE:
-            st.warning("⚠️ OpenCV not available in this environment. Webcam features require local deployment.")
-        else:
-            with st.sidebar:
-                st.header("Webcam Face Recognition")
-                st.write("""
-                1) Press START to activate webcam.
-                2) The model detects faces in real-time.
-                3) Recognized faces are labeled with confidence.
-                4) Press STOP to end the session.
-                """)
-                st.divider()
-                st.subheader("Available Persons")
-                st.write(" • ".join(label_map.values()) if 'label_map' in globals() else "No face model available")
+        with st.sidebar:
+            st.header("Webcam Face Recognition")
+            st.write("""
+            1) Press START to activate webcam.
+            2) The model detects faces in real-time.
+            3) Recognized faces are labeled with confidence.
+            4) Press STOP to end the session.
+            """)
+            st.divider()
+            st.subheader("Available Persons")
+            st.write(" • ".join(label_map.values()) if 'label_map' in globals() else "No face model available")
 
-            st.markdown("### 📹 Real-time Webcam Face Recognition (LBPH)")
+        st.markdown("### 📹 Real-time Webcam Face Recognition (LBPH)")
+        
+        # Load face model for webcam
+        if os.path.exists("face_model.yml") and os.path.exists("label_map.npy"):
+            model_webcam = cv2.face.LBPHFaceRecognizer_create()
+            model_webcam.read("face_model.yml")
+            label_map_webcam = np.load("label_map.npy", allow_pickle=True).item()
             
-            # Load face model for webcam
-            if os.path.exists("face_model.yml") and os.path.exists("label_map.npy"):
-                model_webcam = cv2.face.LBPHFaceRecognizer_create()
-                model_webcam.read("face_model.yml")
-                label_map_webcam = np.load("label_map.npy", allow_pickle=True).item()
-                
-                # Haar Cascade
-                face_cascade = cv2.CascadeClassifier(
-                    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-                )
+            # Haar Cascade
+            face_cascade = cv2.CascadeClassifier(
+                cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            )
 
-                url = st.text_input("Enter URL for IP Camera (leave blank for local webcam):", "")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    start = st.button("▶️ START Webcam")
-                with col2:
-                    stop = st.button("⏹️ STOP Webcam")
+            url = st.text_input("Enter URL for IP Camera (leave blank for local webcam):", "")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                start = st.button("▶️ START Webcam")
+            with col2:
+                stop = st.button("⏹️ STOP Webcam")
 
-                frame_placeholder = st.empty()
-                status_placeholder = st.empty()
+            frame_placeholder = st.empty()
+            status_placeholder = st.empty()
 
-                # Session state to control camera
-                if "run_camera" not in st.session_state:
-                    st.session_state.run_camera = False
+            # Session state to control camera
+            if "run_camera" not in st.session_state:
+                st.session_state.run_camera = False
 
-                if start:
-                    st.session_state.run_camera = True
-                if stop:
-                    st.session_state.run_camera = False
+            if start:
+                st.session_state.run_camera = True
+            if stop:
+                st.session_state.run_camera = False
 
-                cap = None
+            cap = None
 
-                if st.session_state.run_camera:
-                    status_placeholder.info("🔴 Webcam is ACTIVE - Press STOP to end")
-                    try:
-                        cap = cv2.VideoCapture(url if url else 0)
-                        
-                        if not cap.isOpened():
-                            status_placeholder.error("❌ Cannot access webcam/IP camera. Check connection.")
-                        else:
-                            while st.session_state.run_camera:
-                                ret, frame = cap.read()
-                                if not ret:
-                                    status_placeholder.warning("⚠️ Cannot read frame from camera.")
-                                    break
+            if st.session_state.run_camera:
+                status_placeholder.info("🔴 Webcam is ACTIVE - Press STOP to end")
+                try:
+                    cap = cv2.VideoCapture(url if url else 0)
+                    
+                    if not cap.isOpened():
+                        status_placeholder.error("❌ Cannot access webcam/IP camera. Check connection.")
+                    else:
+                        while st.session_state.run_camera:
+                            ret, frame = cap.read()
+                            if not ret:
+                                status_placeholder.warning("⚠️ Cannot read frame from camera.")
+                                break
 
-                                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                                faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+                            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                            faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-                                for (x, y, w, h) in faces:
-                                    face = gray[y:y+h, x:x+w]
-                                    label, confidence = model_webcam.predict(face)
-                                    name = label_map_webcam.get(label, "Unknown")
+                            for (x, y, w, h) in faces:
+                                face = gray[y:y+h, x:x+w]
+                                label, confidence = model_webcam.predict(face)
+                                name = label_map_webcam.get(label, "Unknown")
 
-                                    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                                    cv2.putText(
-                                        frame,
-                                        f"{name} ({confidence:.1f})",
-                                        (x, y-10),
-                                        cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.8,
-                                        (0, 255, 0),
-                                        2
-                                    )
+                                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                                cv2.putText(
+                                    frame,
+                                    f"{name} ({confidence:.1f})",
+                                    (x, y-10),
+                                    cv2.FONT_HERSHEY_SIMPLEX,
+                                    0.8,
+                                    (0, 255, 0),
+                                    2
+                                )
 
-                                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                                frame_placeholder.image(frame_rgb, channels="RGB", use_column_width=True)
+                            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            frame_placeholder.image(frame_rgb, channels="RGB", use_column_width=True)
 
-                    except Exception as e:
-                        status_placeholder.error(f"❌ Error: {str(e)}")
-                    finally:
-                        if cap is not None:
-                            cap.release()
-                        cv2.destroyAllWindows()
-                        status_placeholder.success("✅ Webcam stopped")
-                else:
-                    status_placeholder.info("⚪ Webcam is INACTIVE - Press START to begin")
+                except Exception as e:
+                    status_placeholder.error(f"❌ Error: {str(e)}")
+                finally:
+                    if cap is not None:
+                        cap.release()
+                    cv2.destroyAllWindows()
+                    status_placeholder.success("✅ Webcam stopped")
             else:
-                st.warning("⚠️ Face model files (face_model.yml or label_map.npy) not found. Please train the model first.")
+                status_placeholder.info("⚪ Webcam is INACTIVE - Press START to begin")
+        else:
+            st.warning("⚠️ Face model files (face_model.yml or label_map.npy) not found. Please train the model first.")
