@@ -40,10 +40,19 @@ st.markdown(
 )
 
 # Load the trained models and label encoders
+import os
+
 model_object = joblib.load("svm_multiclass.pkl")
 encoder_object = joblib.load("label_encoder.pkl")
-model_face = joblib.load("svm_multiclass_wajah.pkl")
-encoder_face = joblib.load("label_encoder_wajah.pkl")
+
+# Check if face detection models exist
+face_models_available = os.path.exists("svm_multiclass_wajah.pkl") and os.path.exists("label_encoder_wajah.pkl")
+if face_models_available:
+    model_face = joblib.load("svm_multiclass_wajah.pkl")
+    encoder_face = joblib.load("label_encoder_wajah.pkl")
+else:
+    model_face = None
+    encoder_face = None
 
 
 def preprocess_image(uploaded_file):
@@ -70,7 +79,11 @@ st.markdown(
 )
 
 # Section Selector
-tab1, tab2 = st.tabs(["🎯 Vehicle Detection", "👤 Face Detection - Kuantum Peps"])
+if face_models_available:
+    tab1, tab2 = st.tabs(["🎯 Vehicle Detection", "👤 Face Detection - Kuantum Peps"])
+else:
+    tab1 = st.container()
+    tab2 = None
 
 with tab1:
     with st.sidebar:
@@ -121,53 +134,54 @@ with tab1:
     else:
         st.markdown("<div class=\"card\">Upload an image to see predictions.</div>", unsafe_allow_html=True)
 
-with tab2:
-    with st.sidebar:
-        st.header("Face Detection")
-        st.write("""
-        1) Upload a face image.
-        2) The image is processed using HOG features.
-        3) SVM model identifies the person.
-        4) Confidence score is displayed.
-        """)
-        st.divider()
-        st.subheader("Recognized Faces")
-        st.write(" • ".join(encoder_face.classes_))
+if face_models_available and tab2 is not None:
+    with tab2:
+        with st.sidebar:
+            st.header("Face Detection")
+            st.write("""
+            1) Upload a face image.
+            2) The image is processed using HOG features.
+            3) SVM model identifies the person.
+            4) Confidence score is displayed.
+            """)
+            st.divider()
+            st.subheader("Recognized Faces")
+            st.write(" • ".join(encoder_face.classes_))
 
-    st.markdown("### 👤 Kuantum Peps Face Recognition")
-    
-    uploader_col2, info_col2 = st.columns([1.2, 1])
-    with uploader_col2:
-        st.subheader("Upload Face Image")
-        uploaded_face = st.file_uploader("Choose a face image", type=["jpg", "jpeg", "png"], key="face")
-    with info_col2:
-        st.subheader("Model Info")
-        st.write("Trained on Kuantum Peps team members.")
-        st.write("Using HOG features + Linear SVM.")
+        st.markdown("### 👤 Kuantum Peps Face Recognition")
+        
+        uploader_col2, info_col2 = st.columns([1.2, 1])
+        with uploader_col2:
+            st.subheader("Upload Face Image")
+            uploaded_face = st.file_uploader("Choose a face image", type=["jpg", "jpeg", "png"], key="face")
+        with info_col2:
+            st.subheader("Model Info")
+            st.write("Trained on Kuantum Peps team members.")
+            st.write("Using HOG features + Linear SVM.")
 
-    if uploaded_face is not None:
-        image, features = preprocess_image(uploaded_face)
-        prediction = model_face.predict(features)
-        probabilities = model_face.predict_proba(features)[0]
-        predicted_label = encoder_face.inverse_transform(prediction)[0]
-        confidence = float(np.max(probabilities) * 100)
+        if uploaded_face is not None:
+            image, features = preprocess_image(uploaded_face)
+            prediction = model_face.predict(features)
+            probabilities = model_face.predict_proba(features)[0]
+            predicted_label = encoder_face.inverse_transform(prediction)[0]
+            confidence = float(np.max(probabilities) * 100)
 
-        img_col, result_col = st.columns([1.2, 1])
-        with img_col:
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.markdown("**Face Preview**")
-            st.image(image, use_column_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            img_col, result_col = st.columns([1.2, 1])
+            with img_col:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.markdown("**Face Preview**")
+                st.image(image, use_column_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
-        with result_col:
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.markdown("**Recognized Person**")
-            st.success(f"👤 {predicted_label.upper()}")
-            st.info(f"Confidence: {confidence:.2f}%")
-            st.markdown("<hr>", unsafe_allow_html=True)
-            st.markdown("**All Probabilities**")
-            for class_name, prob in zip(encoder_face.classes_, probabilities):
-                st.write(f"{class_name}: {prob*100:.2f}%")
-            st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.markdown("<div class=\"card\">Upload a face image to identify the person.</div>", unsafe_allow_html=True)
+            with result_col:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.markdown("**Recognized Person**")
+                st.success(f"👤 {predicted_label.upper()}")
+                st.info(f"Confidence: {confidence:.2f}%")
+                st.markdown("<hr>", unsafe_allow_html=True)
+                st.markdown("**All Probabilities**")
+                for class_name, prob in zip(encoder_face.classes_, probabilities):
+                    st.write(f"{class_name}: {prob*100:.2f}%")
+                st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.markdown("<div class=\"card\">Upload a face image to identify the person.</div>", unsafe_allow_html=True)
