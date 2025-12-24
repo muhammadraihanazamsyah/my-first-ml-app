@@ -3,3 +3,4 @@ pillow
 joblib
 numpy
 scikit-image
+opencv-python-headless
