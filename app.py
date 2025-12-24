@@ -71,7 +71,7 @@ def preprocess_image(uploaded_file):
 st.markdown(
     """
     <div class="hero">
-        <h2 style="margin:0;">🚀 Kuantum Peps ML Detection</h2>
+        <h2 style="margin:0;">🚀 ML Detection</h2>
         <p style="margin:4px 0 0 0;">Powerful image classification powered by Support Vector Machine</p>
     </div>
     """,
